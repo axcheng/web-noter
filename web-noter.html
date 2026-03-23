@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Web Noter</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #1e1e2e;
+    --surface: #252535;
+    --surface2: #2e2e45;
+    --border: #3a3a55;
+    --accent: #7c6af7;
+    --accent-hover: #9580ff;
+    --text: #cdd6f4;
+    --text-dim: #7f849c;
+    --success: #a6e3a1;
+    --error: #f38ba8;
+    --warn: #f9e2af;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+  }
+
+  /* ── Layout ── */
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding: 12px 16px;
+    gap: 10px;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  header h1 {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.5px;
+    flex: 1;
+  }
+  header h1 span { color: var(--text-dim); font-weight: 400; font-size: 13px; margin-left: 6px; }
+
+  /* ── Meta fields ── */
+  #meta {
+    display: grid;
+    grid-template-columns: 1fr 2fr 1fr;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .field label {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .field input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 6px 10px;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .field input:focus { border-color: var(--accent); }
+  .field input::placeholder { color: var(--text-dim); }
+
+  /* ── Toolbar ── */
+  #toolbar {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 8px;
+    flex-wrap: wrap;
+  }
+  .tb-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 4px 9px;
+    transition: all 0.1s;
+    white-space: nowrap;
+  }
+  .tb-btn:hover {
+    background: var(--surface2);
+    border-color: var(--border);
+    color: var(--text);
+  }
+  .tb-sep {
+    width: 1px;
+    background: var(--border);
+    margin: 2px 4px;
+  }
+
+  /* ── Editor ── */
+  #editor-wrap {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  #editor {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 14px;
+    line-height: 1.7;
+    padding: 14px 16px;
+    resize: none;
+    outline: none;
+    transition: border-color 0.15s;
+    width: 100%;
+    height: 100%;
+  }
+  #editor:focus { border-color: var(--accent); }
+
+  /* ── Footer ── */
+  footer {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .btn {
+    background: var(--accent);
+    border: none;
+    border-radius: 7px;
+    color: #fff;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 18px;
+    transition: background 0.15s;
+  }
+  .btn:hover { background: var(--accent-hover); }
+  .btn.secondary {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .btn.secondary:hover { background: var(--border); }
+  .btn.icon-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 8px 12px;
+  }
+  .btn.icon-btn:hover { color: var(--text); border-color: var(--accent); }
+
+  #status {
+    flex: 1;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  #status.ok { color: var(--success); }
+  #status.err { color: var(--error); }
+  #status.busy { color: var(--warn); }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    width: 440px;
+    max-width: 95vw;
+  }
+  .modal h2 {
+    font-size: 16px;
+    margin-bottom: 16px;
+    color: var(--text);
+  }
+  .modal .field { margin-bottom: 12px; }
+  .modal .field input {
+    width: 100%;
+    font-family: monospace;
+  }
+  .modal-footer {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 20px;
+  }
+  .modal small {
+    display: block;
+    margin-top: 4px;
+    color: var(--text-dim);
+    font-size: 11px;
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Header -->
+  <header>
+    <h1>Web Noter <span id="dirty-indicator"></span></h1>
+    <button class="btn icon-btn" onclick="openSettings()" title="Settings">⚙️ 設定</button>
+  </header>
+
+  <!-- Meta fields -->
+  <div id="meta">
+    <div class="field">
+      <label>檔名</label>
+      <input id="f-name" type="text" placeholder="my-note.md" spellcheck="false">
+    </div>
+    <div class="field">
+      <label>來源 URL</label>
+      <input id="f-source" type="text" placeholder="https://..." spellcheck="false">
+    </div>
+    <div class="field">
+      <label>標籤</label>
+      <input id="f-tags" type="text" placeholder="tag1, tag2" spellcheck="false">
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div id="toolbar">
+    <button class="tb-btn" onclick="listFromGitHub()" title="列出 GitHub 上的 Markdown 檔案">📋 列表</button>
+    <div class="tb-sep"></div>
+    <button class="tb-btn" onclick="applyTemplate('recipe')" title="食譜範本">🍳 食譜</button>
+  </div>
+
+  <!-- Editor -->
+  <div id="editor-wrap">
+    <textarea id="editor" placeholder="在此輸入 Markdown 內容...&#10;&#10;支援標準 Markdown 語法，包含：&#10;- **粗體** 、*斜體*、`程式碼`&#10;- # 標題&#10;- [連結](url)&#10;- ![圖片](url)"></textarea>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <button class="btn" onclick="appendToGitHub()">➕ 附加至 GitHub</button>
+    <button class="btn secondary" onclick="loadFromGitHub()">📂 載入</button>
+    <button class="btn secondary" onclick="overwriteToGitHub()">✏️ 覆蓋寫入</button>
+    <span id="status"></span>
+  </footer>
+
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settings-modal">
+  <div class="modal">
+    <h2>⚙️ GitHub 設定</h2>
+    <div class="field">
+      <label>Personal Access Token (PAT)</label>
+      <input id="cfg-pat" type="password" placeholder="ghp_xxxxxxxxxxxx">
+      <small>需要 repo 權限。儲存於瀏覽器 localStorage。</small>
+    </div>
+    <div class="field">
+      <label>GitHub 帳號 (Owner)</label>
+      <input id="cfg-owner" type="text" placeholder="your-username">
+    </div>
+    <div class="field">
+      <label>Repository 名稱</label>
+      <input id="cfg-repo" type="text" placeholder="my-notes">
+    </div>
+    <div class="field">
+      <label>Branch</label>
+      <input id="cfg-branch" type="text" placeholder="main">
+    </div>
+    <div class="field">
+      <label>路徑前綴（資料夾）</label>
+      <input id="cfg-prefix" type="text" placeholder="notes/">
+      <small>例：notes/  表示儲存在 repo 的 notes/ 目錄。留空則存於根目錄。</small>
+    </div>
+    <div class="modal-footer">
+      <button class="btn secondary" onclick="closeSettings()">取消</button>
+      <button class="btn" onclick="saveSettings()">儲存設定</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+//  State
+// ─────────────────────────────────────────────
+let currentSha = null; // SHA of the file currently loaded (for updates)
+let isDirty = false;
+
+const editor = document.getElementById('editor');
+const dirtyIndicator = document.getElementById('dirty-indicator');
+const status = document.getElementById('status');
+
+// ─────────────────────────────────────────────
+//  Config (localStorage)
+// ─────────────────────────────────────────────
+function getConfig() {
+  return {
+    pat:    localStorage.getItem('wn_pat')    || '',
+    owner:  localStorage.getItem('wn_owner')  || '',
+    repo:   localStorage.getItem('wn_repo')   || '',
+    branch: localStorage.getItem('wn_branch') || 'main',
+    prefix: localStorage.getItem('wn_prefix') || '',
+  };
+}
+
+function openSettings() {
+  const c = getConfig();
+  document.getElementById('cfg-pat').value    = c.pat;
+  document.getElementById('cfg-owner').value  = c.owner;
+  document.getElementById('cfg-repo').value   = c.repo;
+  document.getElementById('cfg-branch').value = c.branch;
+  document.getElementById('cfg-prefix').value = c.prefix;
+  document.getElementById('settings-modal').classList.add('open');
+}
+
+function closeSettings() {
+  document.getElementById('settings-modal').classList.remove('open');
+}
+
+function saveSettings() {
+  localStorage.setItem('wn_pat',    document.getElementById('cfg-pat').value.trim());
+  localStorage.setItem('wn_owner',  document.getElementById('cfg-owner').value.trim());
+  localStorage.setItem('wn_repo',   document.getElementById('cfg-repo').value.trim());
+  localStorage.setItem('wn_branch', document.getElementById('cfg-branch').value.trim() || 'main');
+  localStorage.setItem('wn_prefix', document.getElementById('cfg-prefix').value.trim());
+  closeSettings();
+  setStatus('設定已儲存', 'ok');
+}
+
+// Close modal on overlay click
+document.getElementById('settings-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeSettings();
+});
+
+// ─────────────────────────────────────────────
+//  Dirty tracking
+// ─────────────────────────────────────────────
+editor.addEventListener('input', () => {
+  isDirty = true;
+  dirtyIndicator.textContent = '●';
+  dirtyIndicator.style.color = '#f9e2af';
+});
+
+function markClean() {
+  isDirty = false;
+  dirtyIndicator.textContent = '';
+}
+
+// ─────────────────────────────────────────────
+//  Status
+// ─────────────────────────────────────────────
+let statusTimer;
+function setStatus(msg, type = '') {
+  clearTimeout(statusTimer);
+  status.textContent = msg;
+  status.className = type;
+  if (type === 'ok') {
+    statusTimer = setTimeout(() => { status.textContent = ''; status.className = ''; }, 4000);
+  }
+}
+
+// ─────────────────────────────────────────────
+//  Helpers: get filename & path
+// ─────────────────────────────────────────────
+function getFilename() {
+  let name = document.getElementById('f-name').value.trim();
+  if (!name) return null;
+  if (!name.endsWith('.md')) name += '.md';
+  return name;
+}
+
+function getFullPath(filename) {
+  const cfg = getConfig();
+  let prefix = cfg.prefix;
+  if (prefix && !prefix.endsWith('/')) prefix += '/';
+  return prefix + filename;
+}
+
+// ─────────────────────────────────────────────
+//  Build Markdown content with frontmatter
+// ─────────────────────────────────────────────
+function buildContent() {
+  const title   = document.getElementById('f-name').value.trim().replace(/\.md$/i, '');
+  const source  = document.getElementById('f-source').value.trim();
+  const tagsRaw = document.getElementById('f-tags').value.trim();
+  const body    = editor.value;
+
+  const tags = tagsRaw
+    ? '[' + tagsRaw.split(',').map(t => t.trim()).filter(Boolean).map(t => `"${t}"`).join(', ') + ']'
+    : '[]';
+
+  const today = new Date().toISOString().split('T')[0];
+
+  const frontmatter = [
+    '---',
+    `title: "${title}"`,
+    source ? `source: "${source}"` : 'source: ""',
+    `date: ${today}`,
+    `tags: ${tags}`,
+    '---',
+    '',
+  ].join('\n');
+
+  return frontmatter + body;
+}
+
+// ─────────────────────────────────────────────
+//  Parse frontmatter when loading
+// ─────────────────────────────────────────────
+function parseContent(raw) {
+  const fmMatch = raw.match(/^---\n([\s\S]*?)\n---\n?/);
+  let body = raw;
+  let meta = { title: '', source: '', tags: '' };
+
+  if (fmMatch) {
+    body = raw.slice(fmMatch[0].length);
+    const fm = fmMatch[1];
+    const titleM  = fm.match(/^title:\s*"?(.+?)"?\s*$/m);
+    const sourceM = fm.match(/^source:\s*"?(.+?)"?\s*$/m);
+    const tagsM   = fm.match(/^tags:\s*\[([^\]]*)\]/m);
+
+    if (titleM)  meta.title  = titleM[1];
+    if (sourceM && sourceM[1]) meta.source = sourceM[1];
+    if (tagsM)   meta.tags   = tagsM[1].replace(/"/g, '').replace(/,\s*/g, ', ');
+  }
+
+  return { meta, body };
+}
+
+// ─────────────────────────────────────────────
+//  GitHub API
+// ─────────────────────────────────────────────
+async function githubRequest(method, path, body = null) {
+  const { pat, owner, repo } = getConfig();
+  if (!pat || !owner || !repo) {
+    throw new Error('請先在設定中填入 GitHub PAT、Owner 和 Repo。');
+  }
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+  const opts = {
+    method,
+    headers: {
+      'Authorization': `Bearer ${pat}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(url, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+  return data;
+}
+
+async function saveToGitHub() {
+  const filename = getFilename();
+  if (!filename) { setStatus('請填寫檔名', 'err'); return; }
+
+  setStatus('儲存中…', 'busy');
+  try {
+    const content = buildContent();
+    const encoded = btoa(unescape(encodeURIComponent(content)));
+    const path = getFullPath(filename);
+    const { branch } = getConfig();
+
+    const payload = {
+      message: `docs: update ${filename}`,
+      content: encoded,
+      branch,
+    };
+    if (currentSha) payload.sha = currentSha;
+
+    const result = await githubRequest('PUT', path, payload);
+    currentSha = result.content.sha;
+    markClean();
+    setStatus(`✓ 已儲存 → ${path}`, 'ok');
+  } catch (e) {
+    setStatus(`✗ 儲存失敗：${e.message}`, 'err');
+  }
+}
+
+async function loadFromGitHub() {
+  const filename = getFilename();
+  if (!filename) { setStatus('請填寫要載入的檔名', 'err'); return; }
+
+  setStatus('載入中…', 'busy');
+  try {
+    const path = getFullPath(filename);
+    const data = await githubRequest('GET', path);
+    const raw = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ''))));
+    const { meta, body } = parseContent(raw);
+
+    document.getElementById('f-name').value   = filename.replace(/\.md$/i, '');
+    document.getElementById('f-source').value = meta.source;
+    document.getElementById('f-tags').value   = meta.tags;
+    editor.value = body;
+    currentSha = data.sha;
+    markClean();
+    setStatus(`✓ 已載入 ${path}`, 'ok');
+  } catch (e) {
+    setStatus(`✗ 載入失敗：${e.message}`, 'err');
+  }
+}
+
+async function appendToGitHub() {
+  const filename = getFilename();
+  if (!filename) { setStatus('請填寫檔名', 'err'); return; }
+  const appendContent = editor.value.trim();
+  if (!appendContent) { setStatus('沒有內容可附加', 'err'); return; }
+
+  setStatus('附加中…', 'busy');
+  try {
+    const path = getFullPath(filename);
+    const { pat, owner, repo, branch } = getConfig();
+    const apiBase = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+    const headers = {
+      'Authorization': `Bearer ${pat}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    };
+
+    // Try GET existing file
+    const getRes = await fetch(apiBase, { headers });
+    let newContent, sha;
+
+    if (getRes.ok) {
+      // File exists — append
+      const data = await getRes.json();
+      const existing = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ''))));
+      const ts = new Date().toISOString().replace('T', ' ').slice(0, 16);
+      newContent = existing.trimEnd() + `\n\n---\n*附加於 ${ts}*\n\n` + appendContent;
+      sha = data.sha;
+    } else if (getRes.status === 404) {
+      // File does not exist — create new
+      newContent = appendContent;
+      sha = null;
+    } else {
+      const err = await getRes.json();
+      throw new Error(err.message || `HTTP ${getRes.status}`);
+    }
+
+    const encoded = btoa(unescape(encodeURIComponent(newContent)));
+    const payload = {
+      message: sha ? `docs: append to ${filename}` : `docs: create ${filename}`,
+      content: encoded,
+      branch,
+    };
+    if (sha) payload.sha = sha;
+
+    const putRes = await fetch(apiBase, { method: 'PUT', headers, body: JSON.stringify(payload) });
+    const result = await putRes.json();
+    if (!putRes.ok) throw new Error(result.message || `HTTP ${putRes.status}`);
+
+    currentSha = result.content.sha;
+    editor.value = '';
+    markClean();
+    setStatus(sha ? `✓ 已附加至 → ${path}` : `✓ 已建立 → ${path}`, 'ok');
+  } catch (e) {
+    setStatus(`✗ 附加失敗：${e.message}`, 'err');
+  }
+}
+
+// ─────────────────────────────────────────────
+//  New note
+// ─────────────────────────────────────────────
+function newNote() {
+  if (isDirty && !confirm('目前有未儲存的變更，確定要新增？')) return;
+  document.getElementById('f-name').value   = '';
+  document.getElementById('f-source').value = '';
+  document.getElementById('f-tags').value   = '';
+  editor.value = '';
+  currentSha = null;
+  markClean();
+  document.getElementById('f-name').focus();
+  setStatus('已清空，請輸入新筆記', '');
+}
+
+async function overwriteToGitHub() {
+  const filename = getFilename();
+  if (!filename) { setStatus('請填寫檔名', 'err'); return; }
+  if (!confirm(`⚠️ 覆蓋寫入會完全取代 GitHub 上的「${filename}」，確定繼續？`)) return;
+
+  setStatus('覆蓋寫入中…', 'busy');
+  try {
+    const path = getFullPath(filename);
+    const { pat, owner, repo, branch } = getConfig();
+    const apiBase = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+    const headers = {
+      'Authorization': `Bearer ${pat}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    };
+
+    // GET current SHA if file exists
+    const getRes = await fetch(apiBase, { headers });
+    let sha = null;
+    if (getRes.ok) {
+      const data = await getRes.json();
+      sha = data.sha;
+    } else if (getRes.status !== 404) {
+      const err = await getRes.json();
+      throw new Error(err.message || `HTTP ${getRes.status}`);
+    }
+
+    const encoded = btoa(unescape(encodeURIComponent(editor.value)));
+    const payload = { message: `docs: overwrite ${filename}`, content: encoded, branch };
+    if (sha) payload.sha = sha;
+
+    const putRes = await fetch(apiBase, { method: 'PUT', headers, body: JSON.stringify(payload) });
+    const result = await putRes.json();
+    if (!putRes.ok) throw new Error(result.message || `HTTP ${putRes.status}`);
+
+    currentSha = result.content.sha;
+    markClean();
+    setStatus(`✓ 已覆蓋寫入 → ${path}`, 'ok');
+  } catch (e) {
+    setStatus(`✗ 覆蓋寫入失敗：${e.message}`, 'err');
+  }
+}
+
+// ─────────────────────────────────────────────
+//  List files from GitHub
+// ─────────────────────────────────────────────
+async function listFromGitHub() {
+  setStatus('列表載入中…', 'busy');
+  try {
+    const { pat, owner, repo, branch, prefix } = getConfig();
+    if (!pat || !owner || !repo) throw new Error('請先在設定中填入 GitHub PAT、Owner 和 Repo。');
+
+    const headers = {
+      'Authorization': `Bearer ${pat}`,
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    };
+
+    const dirPath = prefix ? prefix.replace(/\/$/, '') : '';
+    const contentsUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${dirPath}?ref=${branch || 'main'}`;
+    const res = await fetch(contentsUrl, { headers });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.message || `HTTP ${res.status}`);
+    }
+    const files = await res.json();
+    const mdFiles = files.filter(f => f.type === 'file' && f.name.endsWith('.md'));
+
+    if (mdFiles.length === 0) {
+      editor.value = '（此目錄下沒有 Markdown 檔案）';
+      document.getElementById('f-name').value = '';
+      currentSha = null;
+      markClean();
+      setStatus('沒有找到 .md 檔案', '');
+      return;
+    }
+
+    // Fetch last commit date for each file in parallel
+    const datePromises = mdFiles.map(f =>
+      fetch(`https://api.github.com/repos/${owner}/${repo}/commits?path=${encodeURIComponent(f.path)}&per_page=1&sha=${branch || 'main'}`, { headers })
+        .then(r => r.json())
+        .then(commits => commits[0]?.commit?.committer?.date || commits[0]?.commit?.author?.date || '')
+        .catch(() => '')
+    );
+    const dates = await Promise.all(datePromises);
+
+    const lines = ['# GitHub 檔案列表\n'];
+    lines.push('| 檔名 | 大小 | 日期 |');
+    lines.push('|------|-----:|------|');
+    mdFiles.forEach((f, i) => {
+      const size = f.size >= 1024 ? `${(f.size / 1024).toFixed(1)} KB` : `${f.size} B`;
+      const date = dates[i] ? dates[i].slice(0, 10) : '—';
+      lines.push(`| ${f.name} | ${size} | ${date} |`);
+    });
+
+    editor.value = lines.join('\n');
+    document.getElementById('f-name').value = '';
+    currentSha = null;
+    markClean();
+    setStatus(`✓ 找到 ${mdFiles.length} 個 .md 檔案`, 'ok');
+  } catch (e) {
+    setStatus(`✗ 列表失敗：${e.message}`, 'err');
+  }
+}
+
+// ─────────────────────────────────────────────
+//  Templates
+// ─────────────────────────────────────────────
+const TEMPLATES = {
+  recipe: {
+    name: '做菜筆記',
+    body: `## 料理名稱
+### 來源 [video source](https://www.facebook.com/share/r/samplelink/)
+### 步驟
+1. step 1
+2.
+3.
+4.
+5. 起鍋
+### 食材
+- 牛肉，冬粉，豆腐，金針菇，海帶芽，生雞蛋。
+`,
+  },
+};
+
+function applyTemplate(key) {
+  if (isDirty && !confirm('目前有未儲存的變更，確定要套用範本？')) return;
+  const t = TEMPLATES[key];
+  document.getElementById('f-name').value = t.name;
+  editor.value = t.body;
+  currentSha = null;
+  markClean();
+  editor.focus();
+}
+
+// ─────────────────────────────────────────────
+//  Keyboard shortcuts
+// ─────────────────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    appendToGitHub();
+  }
+
+});
+
+// Tab key indentation in editor
+editor.addEventListener('keydown', (e) => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const start = editor.selectionStart;
+    const end   = editor.selectionEnd;
+    editor.setRangeText('  ', start, end, 'end');
+    editor.dispatchEvent(new Event('input'));
+  }
+});
+
+// ─────────────────────────────────────────────
+//  Init
+// ─────────────────────────────────────────────
+window.addEventListener('load', () => {
+  const cfg = getConfig();
+  if (!cfg.pat || !cfg.owner || !cfg.repo) {
+    setStatus('請先點 ⚙️ 設定，填入 GitHub 資訊', '');
+  }
+  editor.focus();
+});
+</script>
+</body>
+</html>
