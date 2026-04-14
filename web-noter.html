@@ -564,7 +564,7 @@ async function appendToGitHub() {
       // File exists — append
       const data = await getRes.json();
       const existing = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ''))));
-      const ts = new Date().toISOString().replace('T', ' ').slice(0, 16);
+      const ts = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Taipei' }).slice(0, 16);
       newContent = existing.trimEnd() + `\n\n---\n*附加於 ${ts}*\n\n` + appendContent;
       sha = data.sha;
     } else if (getRes.status === 404) {
