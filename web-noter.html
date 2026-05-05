@@ -942,25 +942,26 @@ async function runTesseractOCR() {
     setStatus(`✗ ${e.message}`, 'err');
     return;
   }
-  setStatus('OCR 辨識中（繁體中文）…', 'busy');
+  setStatus('初始化辨識引擎（首次需下載語言包）…', 'busy');
+  let worker;
   try {
-    const result = await Tesseract.recognize(
-      selectedPhotoDataUrl,
-      'chi_tra+eng',
-      {
-        logger: (m) => {
-          if (m.progress && m.status === 'recognizing text') {
-            setStatus(`OCR 辨識中… ${Math.round(m.progress * 100)}%`, 'busy');
-          }
-        },
-      }
-    );
-    const text = result.data.text.trim();
-    if (!text) { setStatus('⚠️ 未辨識到文字', ''); return; }
-    insertAtCursor(text);
-    setStatus(`✓ Tesseract OCR 完成（${text.length} 字元）`, 'ok');
+    worker = await Tesseract.createWorker(['chi_tra', 'eng'], 1, {
+      logger: (m) => {
+        if (m.status === 'recognizing text' && m.progress) {
+          setStatus(`OCR 辨識中… ${Math.round(m.progress * 100)}%`, 'busy');
+        }
+      },
+    });
+    const { data: { text } } = await worker.recognize(selectedPhotoDataUrl);
+    const trimmed = text.trim();
+    if (!trimmed) { setStatus('⚠️ 未辨識到文字', ''); return; }
+    insertAtCursor(trimmed);
+    setStatus(`✓ Tesseract OCR 完成（${trimmed.length} 字元）`, 'ok');
   } catch (e) {
-    setStatus(`✗ OCR 失敗：${e.message}`, 'err');
+    const hint = e.message?.includes('message channel') ? '請改用無痕視窗（停用擴充功能）' : e.message;
+    setStatus(`✗ OCR 失敗：${hint}`, 'err');
+  } finally {
+    if (worker) worker.terminate();
   }
 }
 
