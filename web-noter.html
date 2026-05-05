@@ -233,6 +233,41 @@
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ── Voice recording state ── */
+  .tb-btn.recording {
+    background: var(--error);
+    border-color: var(--error);
+    color: #fff;
+    animation: pulse-rec 1s ease-in-out infinite;
+  }
+  @keyframes pulse-rec { 0%,100%{opacity:1} 50%{opacity:.55} }
+
+  /* ── OCR mode selector panel ── */
+  #ocr-panel {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    flex-shrink: 0;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  #ocr-panel.open { display: flex; }
+  #ocr-panel > span {
+    font-size: 12px;
+    color: var(--text-dim);
+    flex: 1;
+    min-width: 100%;
+  }
+
+  /* ── Mobile touch targets (touch screens only) ── */
+  @media (pointer: coarse) {
+    .tb-btn { padding: 10px 12px; font-size: 14px; }
+    .tb-sep { margin: 4px 6px; }
+  }
 </style>
 </head>
 <body>
@@ -265,6 +300,18 @@
     <button class="tb-btn" onclick="listFromGitHub()" title="列出 GitHub 上的 Markdown 檔案">📋 列表</button>
     <div class="tb-sep"></div>
     <button class="tb-btn" onclick="applyTemplate('recipe')" title="食譜範本">🍳 食譜</button>
+    <div class="tb-sep"></div>
+    <button class="tb-btn" id="voice-btn" onclick="toggleVoice()" title="語音輸入（需 HTTPS）">🎤 語音</button>
+    <div class="tb-sep"></div>
+    <button class="tb-btn" onclick="openPhotoPicker()" title="拍照或選圖 OCR">📷 拍照</button>
+  </div>
+
+  <!-- OCR mode selector panel -->
+  <div id="ocr-panel">
+    <span id="ocr-filename">已選擇圖片：—</span>
+    <button class="btn secondary" onclick="runOCR('rough')">🔍 快速辨識（Tesseract）</button>
+    <button class="btn secondary" onclick="runOCR('precise')">✨ 精確辨識（Claude）</button>
+    <button class="btn icon-btn" onclick="closeOcrPanel()" title="取消">✕</button>
   </div>
 
   <!-- Editor -->
@@ -308,12 +355,20 @@
       <input id="cfg-prefix" type="text" placeholder="notes/">
       <small>例：notes/  表示儲存在 repo 的 notes/ 目錄。留空則存於根目錄。</small>
     </div>
+    <div class="field">
+      <label>Claude API Key（OCR 精確辨識用）</label>
+      <input id="cfg-claude-key" type="password" placeholder="sk-ant-api03-...">
+      <small>用於 Claude Vision OCR 精確模式，儲存於 localStorage。選填。</small>
+    </div>
     <div class="modal-footer">
       <button class="btn secondary" onclick="closeSettings()">取消</button>
       <button class="btn" onclick="saveSettings()">儲存設定</button>
     </div>
   </div>
 </div>
+
+<!-- Hidden photo file picker — no capture attr: iOS shows camera+library sheet automatically -->
+<input type="file" id="photo-input" accept="image/*" style="display:none">
 
 <script>
 // ─────────────────────────────────────────────
@@ -331,21 +386,23 @@ const status = document.getElementById('status');
 // ─────────────────────────────────────────────
 function getConfig() {
   return {
-    pat:    localStorage.getItem('wn_pat')    || '',
-    owner:  localStorage.getItem('wn_owner')  || '',
-    repo:   localStorage.getItem('wn_repo')   || '',
-    branch: localStorage.getItem('wn_branch') || 'main',
-    prefix: localStorage.getItem('wn_prefix') || '',
+    pat:       localStorage.getItem('wn_pat')        || '',
+    owner:     localStorage.getItem('wn_owner')      || '',
+    repo:      localStorage.getItem('wn_repo')       || '',
+    branch:    localStorage.getItem('wn_branch')     || 'main',
+    prefix:    localStorage.getItem('wn_prefix')     || '',
+    claudeKey: localStorage.getItem('wn_claude_key') || '',
   };
 }
 
 function openSettings() {
   const c = getConfig();
-  document.getElementById('cfg-pat').value    = c.pat;
-  document.getElementById('cfg-owner').value  = c.owner;
-  document.getElementById('cfg-repo').value   = c.repo;
-  document.getElementById('cfg-branch').value = c.branch;
-  document.getElementById('cfg-prefix').value = c.prefix;
+  document.getElementById('cfg-pat').value        = c.pat;
+  document.getElementById('cfg-owner').value      = c.owner;
+  document.getElementById('cfg-repo').value       = c.repo;
+  document.getElementById('cfg-branch').value     = c.branch;
+  document.getElementById('cfg-prefix').value     = c.prefix;
+  document.getElementById('cfg-claude-key').value = c.claudeKey;
   document.getElementById('settings-modal').classList.add('open');
 }
 
@@ -354,11 +411,12 @@ function closeSettings() {
 }
 
 function saveSettings() {
-  localStorage.setItem('wn_pat',    document.getElementById('cfg-pat').value.trim());
-  localStorage.setItem('wn_owner',  document.getElementById('cfg-owner').value.trim());
-  localStorage.setItem('wn_repo',   document.getElementById('cfg-repo').value.trim());
-  localStorage.setItem('wn_branch', document.getElementById('cfg-branch').value.trim() || 'main');
-  localStorage.setItem('wn_prefix', document.getElementById('cfg-prefix').value.trim());
+  localStorage.setItem('wn_pat',        document.getElementById('cfg-pat').value.trim());
+  localStorage.setItem('wn_owner',      document.getElementById('cfg-owner').value.trim());
+  localStorage.setItem('wn_repo',       document.getElementById('cfg-repo').value.trim());
+  localStorage.setItem('wn_branch',     document.getElementById('cfg-branch').value.trim() || 'main');
+  localStorage.setItem('wn_prefix',     document.getElementById('cfg-prefix').value.trim());
+  localStorage.setItem('wn_claude_key', document.getElementById('cfg-claude-key').value.trim());
   closeSettings();
   setStatus('設定已儲存', 'ok');
 }
@@ -769,6 +827,214 @@ editor.addEventListener('keydown', (e) => {
     editor.dispatchEvent(new Event('input'));
   }
 });
+
+// ─────────────────────────────────────────────
+//  Cursor insertion helper
+// ─────────────────────────────────────────────
+function insertAtCursor(text) {
+  const start = editor.selectionStart;
+  const end   = editor.selectionEnd;
+  editor.setRangeText(text, start, end, 'end');
+  editor.dispatchEvent(new Event('input'));
+  editor.focus();
+}
+
+// ─────────────────────────────────────────────
+//  Voice Input (webkitSpeechRecognition — iOS Safari, HTTPS required)
+// ─────────────────────────────────────────────
+let voiceRecognition = null;
+let isRecording = false;
+
+function toggleVoice() {
+  if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+    setStatus('⚠️ 語音輸入需要 HTTPS，請透過 GitHub Pages 或 HTTPS 網址開啟', 'err');
+    return;
+  }
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    setStatus('⚠️ 此瀏覽器不支援語音辨識（請用 iOS Safari 或 Chrome）', 'err');
+    return;
+  }
+
+  if (isRecording) {
+    voiceRecognition.stop();
+    return;
+  }
+
+  voiceRecognition = new SpeechRecognition();
+  voiceRecognition.lang = 'zh-TW';
+  voiceRecognition.interimResults = false;
+  voiceRecognition.maxAlternatives = 1;
+  voiceRecognition.continuous = false;
+
+  const voiceBtn = document.getElementById('voice-btn');
+
+  voiceRecognition.onstart = () => {
+    isRecording = true;
+    voiceBtn.textContent = '⏹ 停止';
+    voiceBtn.classList.add('recording');
+    setStatus('🎤 錄音中…請說話', 'busy');
+  };
+
+  voiceRecognition.onresult = (e) => {
+    const transcript = e.results[0][0].transcript;
+    insertAtCursor(transcript);
+    setStatus(`✓ 已插入語音：「${transcript.slice(0, 20)}${transcript.length > 20 ? '…' : ''}」`, 'ok');
+  };
+
+  voiceRecognition.onerror = (e) => {
+    const msgs = {
+      'not-allowed': '請允許麥克風權限',
+      'network':     '網路錯誤，請檢查連線',
+      'no-speech':   '未偵測到語音',
+      'aborted':     '已取消',
+    };
+    setStatus(`⚠️ 語音錯誤：${msgs[e.error] || e.error}`, 'err');
+  };
+
+  voiceRecognition.onend = () => {
+    isRecording = false;
+    voiceBtn.textContent = '🎤 語音';
+    voiceBtn.classList.remove('recording');
+    if (status.className === 'busy') {
+      setStatus('（未偵測到語音）', '');
+    }
+  };
+
+  voiceRecognition.start();
+}
+
+// ─────────────────────────────────────────────
+//  Camera / Photo OCR
+// ─────────────────────────────────────────────
+let selectedPhotoDataUrl = null;
+
+function openPhotoPicker() {
+  document.getElementById('photo-input').click();
+}
+
+document.getElementById('photo-input').addEventListener('change', function () {
+  const file = this.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    selectedPhotoDataUrl = e.target.result;
+    document.getElementById('ocr-filename').textContent = `已選擇圖片：${file.name}`;
+    document.getElementById('ocr-panel').classList.add('open');
+    setStatus('請選擇辨識模式', '');
+  };
+  reader.readAsDataURL(file);
+  this.value = '';
+});
+
+function closeOcrPanel() {
+  document.getElementById('ocr-panel').classList.remove('open');
+  selectedPhotoDataUrl = null;
+}
+
+async function runOCR(mode) {
+  if (!selectedPhotoDataUrl) { setStatus('未選擇圖片', 'err'); return; }
+  closeOcrPanel();
+  if (mode === 'rough') {
+    await runTesseractOCR();
+  } else {
+    await runClaudeOCR();
+  }
+}
+
+// ── Tesseract.js lazy loader ──
+let tesseractLoaded = false;
+
+function loadTesseract() {
+  return new Promise((resolve, reject) => {
+    if (tesseractLoaded) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+    s.onload = () => { tesseractLoaded = true; resolve(); };
+    s.onerror = () => reject(new Error('Tesseract.js 載入失敗，請檢查網路連線'));
+    document.head.appendChild(s);
+  });
+}
+
+async function runTesseractOCR() {
+  setStatus('載入 Tesseract.js…', 'busy');
+  try {
+    await loadTesseract();
+  } catch (e) {
+    setStatus(`✗ ${e.message}`, 'err');
+    return;
+  }
+  setStatus('OCR 辨識中（繁體中文）…', 'busy');
+  try {
+    const result = await Tesseract.recognize(
+      selectedPhotoDataUrl,
+      'chi_tra+eng',
+      {
+        logger: (m) => {
+          if (m.progress && m.status === 'recognizing text') {
+            setStatus(`OCR 辨識中… ${Math.round(m.progress * 100)}%`, 'busy');
+          }
+        },
+      }
+    );
+    const text = result.data.text.trim();
+    if (!text) { setStatus('⚠️ 未辨識到文字', ''); return; }
+    insertAtCursor(text);
+    setStatus(`✓ Tesseract OCR 完成（${text.length} 字元）`, 'ok');
+  } catch (e) {
+    setStatus(`✗ OCR 失敗：${e.message}`, 'err');
+  }
+}
+
+async function runClaudeOCR() {
+  const { claudeKey } = getConfig();
+  if (!claudeKey) {
+    setStatus('⚠️ 請先在設定中填入 Claude API Key', 'err');
+    return;
+  }
+  setStatus('Claude Vision OCR 中…', 'busy');
+  try {
+    const [header, base64Data] = selectedPhotoDataUrl.split(',');
+    const mediaType = header.match(/data:([^;]+)/)[1];
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type':                              'application/json',
+        'x-api-key':                                 claudeKey,
+        'anthropic-version':                         '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model:      'claude-haiku-4-5-20251001',
+        max_tokens: 2048,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type:   'image',
+              source: { type: 'base64', media_type: mediaType, data: base64Data },
+            },
+            {
+              type: 'text',
+              text: '請提取這張圖片中的所有文字，盡量保留原有的排版格式（換行、縮排、標點符號）。只輸出提取到的文字，不需要額外說明。',
+            },
+          ],
+        }],
+      }),
+    });
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error?.message || `HTTP ${response.status}`);
+    }
+    const data = await response.json();
+    const text = data.content[0]?.text?.trim() || '';
+    if (!text) { setStatus('⚠️ Claude 未提取到文字', ''); return; }
+    insertAtCursor(text);
+    setStatus(`✓ Claude OCR 完成（${text.length} 字元）`, 'ok');
+  } catch (e) {
+    setStatus(`✗ Claude OCR 失敗：${e.message}`, 'err');
+  }
+}
 
 // ─────────────────────────────────────────────
 //  Init
