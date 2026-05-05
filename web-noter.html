@@ -351,7 +351,7 @@
 
   <!-- Header -->
   <header>
-    <h1>Web Noter <span>05051617</span><span id="dirty-indicator"></span></h1>
+    <h1>Web Noter <span id="version-ts"></span><span id="dirty-indicator"></span></h1>
     <button class="btn icon-btn" onclick="if(!isDirty||confirm('有未儲存的內容，確定重新載入？'))location.reload()" title="重新載入">🔄</button>
     <button class="btn icon-btn" onclick="openSettings()" title="Settings">⚙️ 設定</button>
   </header>
@@ -1139,6 +1139,11 @@ async function runClaudeOCR() {
 //  Init
 // ─────────────────────────────────────────────
 window.addEventListener('load', () => {
+  const lm = new Date(document.lastModified);
+  const p = n => String(n).padStart(2, '0');
+  document.getElementById('version-ts').textContent =
+    p(lm.getMonth()+1) + p(lm.getDate()) + p(lm.getHours()) + p(lm.getMinutes());
+
   const cfg = getConfig();
   if (!cfg.pat || !cfg.owner || !cfg.repo) {
     setStatus('請先點 ⚙️ 設定，填入 GitHub 資訊', '');
