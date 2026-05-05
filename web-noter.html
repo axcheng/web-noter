@@ -56,9 +56,6 @@
 
   /* ── Meta fields ── */
   #meta {
-    display: grid;
-    grid-template-columns: 1fr 2fr 1fr;
-    gap: 8px;
     flex-shrink: 0;
   }
 
@@ -263,10 +260,24 @@
     min-width: 100%;
   }
 
-  /* ── Mobile touch targets (touch screens only) ── */
+  /* ── Mobile / touch screens ── */
   @media (pointer: coarse) {
+    /* Larger touch targets */
     .tb-btn { padding: 10px 12px; font-size: 14px; }
     .tb-sep { margin: 4px 6px; }
+    .btn { padding: 11px 16px; font-size: 14px; }
+
+    /* Prevent iOS auto-zoom on focused inputs (must be ≥ 16px) */
+    .field input, #editor { font-size: 16px; }
+
+    /* Status bar wraps below buttons */
+    footer { flex-wrap: wrap; gap: 8px; }
+    #status { flex-basis: 100%; text-align: center; }
+  }
+
+  /* Very narrow screens (iPhone SE etc.) */
+  @media (max-width: 390px) {
+    #app { padding: 8px 10px; gap: 8px; }
   }
 </style>
 </head>
@@ -276,6 +287,7 @@
   <!-- Header -->
   <header>
     <h1>Web Noter <span id="dirty-indicator"></span></h1>
+    <button class="btn icon-btn" onclick="if(!isDirty||confirm('有未儲存的內容，確定重新載入？'))location.reload()" title="重新載入">🔄</button>
     <button class="btn icon-btn" onclick="openSettings()" title="Settings">⚙️ 設定</button>
   </header>
 
@@ -284,14 +296,6 @@
     <div class="field">
       <label>檔名</label>
       <input id="f-name" type="text" placeholder="my-note.md" spellcheck="false">
-    </div>
-    <div class="field">
-      <label>來源 URL</label>
-      <input id="f-source" type="text" placeholder="https://..." spellcheck="false">
-    </div>
-    <div class="field">
-      <label>標籤</label>
-      <input id="f-tags" type="text" placeholder="tag1, tag2" spellcheck="false">
     </div>
   </div>
 
@@ -474,28 +478,10 @@ function getFullPath(filename) {
 //  Build Markdown content with frontmatter
 // ─────────────────────────────────────────────
 function buildContent() {
-  const title   = document.getElementById('f-name').value.trim().replace(/\.md$/i, '');
-  const source  = document.getElementById('f-source').value.trim();
-  const tagsRaw = document.getElementById('f-tags').value.trim();
-  const body    = editor.value;
-
-  const tags = tagsRaw
-    ? '[' + tagsRaw.split(',').map(t => t.trim()).filter(Boolean).map(t => `"${t}"`).join(', ') + ']'
-    : '[]';
-
+  const title = document.getElementById('f-name').value.trim().replace(/\.md$/i, '');
   const today = new Date().toISOString().split('T')[0];
-
-  const frontmatter = [
-    '---',
-    `title: "${title}"`,
-    source ? `source: "${source}"` : 'source: ""',
-    `date: ${today}`,
-    `tags: ${tags}`,
-    '---',
-    '',
-  ].join('\n');
-
-  return frontmatter + body;
+  const frontmatter = ['---', `title: "${title}"`, `date: ${today}`, '---', ''].join('\n');
+  return frontmatter + editor.value;
 }
 
 // ─────────────────────────────────────────────
@@ -504,18 +490,12 @@ function buildContent() {
 function parseContent(raw) {
   const fmMatch = raw.match(/^---\n([\s\S]*?)\n---\n?/);
   let body = raw;
-  let meta = { title: '', source: '', tags: '' };
+  let meta = { title: '' };
 
   if (fmMatch) {
     body = raw.slice(fmMatch[0].length);
-    const fm = fmMatch[1];
-    const titleM  = fm.match(/^title:\s*"?(.+?)"?\s*$/m);
-    const sourceM = fm.match(/^source:\s*"?(.+?)"?\s*$/m);
-    const tagsM   = fm.match(/^tags:\s*\[([^\]]*)\]/m);
-
-    if (titleM)  meta.title  = titleM[1];
-    if (sourceM && sourceM[1]) meta.source = sourceM[1];
-    if (tagsM)   meta.tags   = tagsM[1].replace(/"/g, '').replace(/,\s*/g, ', ');
+    const titleM = fmMatch[1].match(/^title:\s*"?(.+?)"?\s*$/m);
+    if (titleM) meta.title = titleM[1];
   }
 
   return { meta, body };
@@ -584,9 +564,7 @@ async function loadFromGitHub() {
     const raw = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ''))));
     const { meta, body } = parseContent(raw);
 
-    document.getElementById('f-name').value   = filename.replace(/\.md$/i, '');
-    document.getElementById('f-source').value = meta.source;
-    document.getElementById('f-tags').value   = meta.tags;
+    document.getElementById('f-name').value = filename.replace(/\.md$/i, '');
     editor.value = body;
     currentSha = data.sha;
     markClean();
